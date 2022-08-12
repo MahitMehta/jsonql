@@ -1,6 +1,6 @@
 {
   "name": "@mahitm/jsonql",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Mini JSON objects for faster data transfers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
