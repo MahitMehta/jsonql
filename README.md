@@ -1,0 +1,1 @@
+Simple Library to minify JSON objects for faster data transfers. 
