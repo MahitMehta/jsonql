@@ -1,11 +1,16 @@
 import invert from "lodash/invert";
 import cloneDeep from "lodash/cloneDeep";
+import { isURL, revertURL, switchURL } from "./utils";
 
 export interface JsonQLObject {
     registry: {
         [ key: string ]: string; 
     },
     data: object;
+}
+
+export interface JsonQLOptions {
+    links?: boolean; 
 }
 
 export class JsonQL {
@@ -15,8 +20,11 @@ export class JsonQL {
     }
 
     private registry:{ [ key: string ]: string } = {} 
+    private readonly options:JsonQLOptions;  
 
-    constructor() {}
+    constructor(options:JsonQLOptions = {}) {
+        this.options = options; 
+    }
 
     public mini<T extends object>(object: T) : JsonQLObject {
         const data = Array.isArray(object) ? 
@@ -34,24 +42,39 @@ export class JsonQL {
         
         return data; 
     }
+    
+    /**
+     *  Returns true if object will shrink due to compression, else false.
+     * @param object
+     */
+    public static validateJSON<T extends object>(object:T) {   
+        const mini = new JsonQL().mini(object);
+        const miniSize =  new TextEncoder().encode(JSON.stringify(mini)).length;
+        const orginalSize = new TextEncoder().encode(JSON.stringify(object)).length;
+        return miniSize < orginalSize;
+    }
 
     private switchObject<T extends object>(object: T,  getKey:Function) {
         const switchedObject = {};
         getKey.apply(this);
 
-        for (let key in object) {
-            const isArray = Array.isArray(object[key]); 
-            const isNull = object[key] === null;
+        for (let [ key, val ] of Object.entries(object)) {
+            const isArray = Array.isArray(val); 
+            const isNull = val === null;
+            const isValidURL = this.options.links && typeof val === 'string' && isURL(val); 
+            const identifer = isValidURL ? "^" : "";
+            const switchedKey = getKey(key, identifer);
 
-            if (typeof object[key] === "object" && !isArray && !isNull) {
-                const subobject = object[key];
-                switchedObject[getKey(key)] = this.switchObject<any>(subobject, getKey);
+            if (typeof val === "object" && !isArray && !isNull) {
+                const subobject = val;
+                switchedObject[switchedKey] = this.switchObject<any>(subobject, getKey);
             } else if (isArray) {
-                switchedObject[getKey(key)] = this.switchArray(object[key], getKey);
-            }   
-            else switchedObject[getKey(key)] = object[key];
+                switchedObject[switchedKey] = this.switchArray(val, getKey);
+            } else {
+                if (key.startsWith("^")) val = revertURL(getKey, val);
+                switchedObject[switchedKey] = isValidURL ? switchURL(getKey, val) : val;
+            }
         }
-
         return switchedObject
     }
 
@@ -68,8 +91,9 @@ export class JsonQL {
         return this.registry[miniKey];
     };
 
-    private getNextKey(oldKey:string) : string {
-        const nextKey = `${this.counter.repeat || ''}${this.counter.key}`;
+    private getNextKey(oldKey:string, identifer: string = "") : string {
+        if (oldKey === undefined) return; 
+        const nextKey = `${identifer}${this.counter.repeat || ''}${this.counter.key}`;
         if (this.registry[oldKey] !== undefined) return this.registry[oldKey]
         this.registry[oldKey] = nextKey;
         if (this.counter.key > 8) {
