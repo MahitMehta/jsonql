@@ -12,7 +12,7 @@ Simple Library to minify JSON objects for faster data transfers. This is achieve
  
 # Experiment
 
-To try out if this library is useful, you can send a GET request to this endpoint [jsonql.mahitm.com/api/jsonql?minify=true](jsonql.mahitm.com/api/jsonql?minify=true) with a valid JSON body. If you would like to compare the size of the JSON object before and after using the library, you can switch the query parameter `minify` to true or false. 
+To try out if this library is useful, you can send a POST request to this endpoint [jsonql.mahitm.com/api/jsonql?minify=true](jsonql.mahitm.com/api/jsonql?minify=true) with a valid JSON body. If you would like to compare the size of the JSON object before and after using the library, you can switch the query parameter `minify` to true or false. 
  
 # Demo 
 
