@@ -19,6 +19,9 @@ export class JsonQL {
         repeat: 0
     }
 
+    private readonly MAX_STACK_SIZE = 1000;
+    private stackCounter = 0; 
+
     private registry:{ [ key: string ]: string } = {} 
     private readonly options:JsonQLOptions;  
 
@@ -26,19 +29,19 @@ export class JsonQL {
         this.options = options; 
     }
 
-    public mini<T extends object>(object: T) : JsonQLObject {
+    public async mini<T extends object>(object: T) : Promise<JsonQLObject> {
         const data = Array.isArray(object) ? 
-            this.switchArray(object, this.getNextKey.bind(this)) : 
-            this.switchObject(object, this.getNextKey.bind(this));
+            await this.addToStack(this.switchArray, object, this.getNextKey.bind(this)) : 
+            await this.addToStack(this.switchObject, object, this.getNextKey.bind(this));
 
         return { data, registry: this.registry }
     }
 
-    public revert<T extends object>(object:JsonQLObject) : T {
+    public async revert<T extends object>(object:JsonQLObject) : Promise<T> {
         this.registry = invert(cloneDeep(object.registry));
         const data = Array.isArray(object.data) ? 
-            this.switchArray(object.data, this.injectKey.bind(this)) : 
-            this.switchObject(object.data, this.injectKey.bind(this));
+            await this.addToStack(this.switchArray, object.data, this.injectKey.bind(this)) : 
+            await this.addToStack(this.switchObject, object.data, this.injectKey.bind(this));
         
         return data; 
     }
@@ -54,7 +57,7 @@ export class JsonQL {
         return miniSize < orginalSize;
     }
 
-    private switchObject<T extends object>(object: T,  getKey:Function) {
+    private async switchObject<T extends object>(object: T,  getKey:Function) {
         const switchedObject = {};
         getKey.apply(this);
 
@@ -67,9 +70,9 @@ export class JsonQL {
 
             if (typeof val === "object" && !isArray && !isNull) {
                 const subobject = val;
-                switchedObject[switchedKey] = this.switchObject<any>(subobject, getKey);
+                switchedObject[switchedKey] = await this.addToStack(this.switchObject, subobject, getKey);
             } else if (isArray) {
-                switchedObject[switchedKey] = this.switchArray(val, getKey);
+                switchedObject[switchedKey] = await this.addToStack(this.switchArray, val, getKey);
             } else {
                 if (key.startsWith("^")) val = revertURL(getKey, val);
                 switchedObject[switchedKey] = isValidURL ? switchURL(getKey, val) : val;
@@ -78,13 +81,13 @@ export class JsonQL {
         return switchedObject
     }
 
-    private switchArray(object:any, getKey:Function) {
+    private async switchArray(object:any, getKey:Function) {
         getKey.apply(this);
-        return object.map((item:any) => {
-            if (Array.isArray(item)) return this.switchArray(object, getKey);
-            else if (typeof item === "object") return this.switchObject(item, getKey);
+        return await Promise.all(await object.map(async (item:any) => {
+            if (Array.isArray(item)) return await Promise.all(await this.addToStack(this.switchArray, item, getKey));
+            else if (typeof item === "object") return await this.addToStack(this.switchObject, item, getKey);
             else return item; 
-        });
+        }));
     }
 
     private injectKey(miniKey:string) : string {
@@ -102,6 +105,20 @@ export class JsonQL {
         } else this.counter.key += 1;
 
         return nextKey;
+    }
+
+    private async addToStack(cb: Function, ...params:any[]) {
+        this.stackCounter++;
+        if (this.stackCounter > this.MAX_STACK_SIZE) {
+            this.stackCounter = 0;
+
+            return await new Promise((resolve) => {
+                process.nextTick(async () => {
+                    resolve(await cb(this, ...params));
+                });
+            }); 
+        }
+        return await cb.call(this, ...params);
     }
 }
 
