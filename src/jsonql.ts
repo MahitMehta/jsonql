@@ -81,7 +81,7 @@ export class JsonQL {
     private switchArray(object:any, getKey:Function) {
         getKey.apply(this);
         return object.map((item:any) => {
-            if (Array.isArray(item)) return this.switchArray(object, getKey);
+            if (Array.isArray(item)) return this.switchArray(item, getKey);
             else if (typeof item === "object") return this.switchObject(item, getKey);
             else return item; 
         });
